@@ -1,0 +1,56 @@
+networks:
+  monitor:
+    external: true
+  logs:
+    external: true
+services:
+  vmagent:
+    image: 'victoriametrics/vmagent:latest'
+    container_name: vmagent
+    depends_on:
+      - victoria-metrics
+    networks:
+      - monitor
+      - logs
+    restart: unless-stopped
+    volumes:
+      - './vmagent-config:/etc/vmagent'
+      - 'vmagent-data:/vmagent-data'
+      - './vmagent.yml:/etc/vmagent/vmagent.yml'
+    command:
+      - '--promscrape.config=/etc/vmagent/vmagent.yml'
+      - '--remoteWrite.url=http://victoria-metrics:8428/api/v1/write'
+      - '-remoteWrite.tmpDataPath=/vmagent-data'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'wget -q --spider http://localhost:8429/metrics || exit 1'
+      interval: 30s
+      retries: 3
+      start_period: 10s
+      timeout: 10s
+  victoria-metrics:
+    image: 'victoriametrics/victoria-metrics:latest'
+    container_name: victoria-metrics
+    restart: unless-stopped
+    networks:
+      - monitor
+    volumes:
+      - 'victoria-data:/storage'
+    command:
+      - '--retentionPeriod=15d'
+      - '--httpListenAddr=:8428'
+      - '--storageDataPath=/storage'
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '--spider'
+        - '-q'
+        - 'http://localhost:8428/health'
+      interval: 30s
+      retries: 3
+      start_period: 10s
+      timeout: 5s
+volumes:
+  victoria-data: null
